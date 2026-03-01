@@ -24,3 +24,10 @@ export async function getCurrentUser() {
   return session.user;
 }
 
+type RoleUser = {
+  role?: string | null;
+} | null;
+
+export function isAdmin(user: RoleUser) {
+  return user?.role === "ADMIN";
+}

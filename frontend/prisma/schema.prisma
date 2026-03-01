@@ -14,20 +14,22 @@ datasource db {
 }
 
 model User {
-  id             String   @id @default(cuid())
-  email          String   @unique
-  passwordHash   String
-  fullName       String
-  status         String   @default("PENDING") // PENDING | ACTIVE | REJECTED
-  emailVerified  DateTime?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id            String    @id @default(cuid())
+  email         String    @unique
+  passwordHash  String
+  fullName      String
+  role          String    @default("MEMBER") // MEMBER | ADMIN
+  status        String    @default("PENDING") // PENDING | ACTIVE | REJECTED
+  emailVerified DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
-  twoFAEnabled   Boolean  @default(false)
-  twoFASecret    String?  // for TOTP later (or store encrypted)
+  twoFAEnabled Boolean @default(false)
+  twoFASecret  String? // for TOTP later (or store encrypted)
 
-  sessions       Session[]
-  tokens         VerificationToken[]
+  sessions      Session[]
+  tokens        VerificationToken[]
+  eventsCreated Event[]
 }
 
 model Session {
@@ -44,7 +46,7 @@ model VerificationToken {
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   tokenHash String   @unique
-  type      String   // "EMAIL_VERIFY"
+  type      String // "EMAIL_VERIFY"
   expiresAt DateTime
   createdAt DateTime @default(now())
 }
@@ -56,27 +58,44 @@ model Course {
   summary     String
   description String?
   cpdHours    Int
-  level       String   // "Beginner" | "Intermediate" | "Advanced"
+  level       String // "Beginner" | "Intermediate" | "Advanced"
   tags        String[] // Postgres array
   isPublished Boolean  @default(false)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  resources   CourseResource[]
+  resources CourseResource[]
 }
 
 model CourseResource {
-  id        String   @id @default(cuid())
-  courseId  String
-  course    Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  id       String @id @default(cuid())
+  courseId String
+  course   Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
 
-  title     String
-  kind      String   // "pdf" | "video" | "link" | etc.
+  title         String
+  kind          String // "pdf" | "video" | "link" | etc.
   // Points to your storage key (NOT a public URL)
-  storageKey String
-  mimeType  String?
-  sizeBytes Int?
+  storageKey    String
+  mimeType      String?
+  sizeBytes     Int?
   isMembersOnly Boolean @default(true)
 
   createdAt DateTime @default(now())
+}
+
+model Event {
+  id          String   @id @default(cuid())
+  title       String
+  summary     String?
+  description String?
+  startsAt    DateTime
+  endsAt      DateTime
+  timezone    String   @default("Europe/London")
+  location    String?
+  allDay      Boolean  @default(false)
+  isPublished Boolean  @default(true)
+  createdById String?
+  createdBy   User?    @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
