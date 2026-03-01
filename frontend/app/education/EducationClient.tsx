@@ -16,6 +16,7 @@ type Course = {
   slug: string;
   title: string;
   summary: string;
+  imageUrl?: string | null;
   description: string | null;
   cpdHours: number;
   level: string;
@@ -38,6 +39,12 @@ type Props = {
 function letterKey(title: string) {
   const ch = title.trim().charAt(0).toUpperCase();
   return ch >= "A" && ch <= "Z" ? ch : "#";
+}
+
+function shortSummary(text: string, maxLen = 140) {
+  const clean = text.trim();
+  if (clean.length <= maxLen) return clean;
+  return `${clean.slice(0, maxLen - 1).trimEnd()}…`;
 }
 
 export default function EducationClient({ isMember, userName, cpdOverview, courses }: Props) {
@@ -169,11 +176,16 @@ export default function EducationClient({ isMember, userName, cpdOverview, cours
             <>
               <div className="text-sm font-semibold opacity-70">Course preview</div>
               <h2 className="mt-2 text-2xl font-extrabold">{selected.title}</h2>
-              <p className="mt-3 opacity-85">{selected.summary}</p>
+              <p className="mt-3 opacity-85">{shortSummary(selected.summary)}</p>
 
-              {selected.description && (
-                <p className="mt-3 text-sm opacity-80">{selected.description}</p>
-              )}
+              <div className="mt-5 flex justify-center">
+                <img
+                  src={selected.imageUrl || "https://placehold.co/1200x675?text=Course+Preview"}
+                  alt={`${selected.title} course preview`}
+                  className="w-4/5 rounded-xl border object-cover"
+                  loading="lazy"
+                />
+              </div>
 
               <div className="mt-5 grid gap-3 sm:grid-cols-2">
                 <div className="rounded-xl bg-black/5 p-4">
@@ -199,38 +211,6 @@ export default function EducationClient({ isMember, userName, cpdOverview, cours
                     )}
                   </div>
                 </div>
-              </div>
-
-              {/* Resources */}
-              <div className="mt-6">
-                <div className="text-sm font-semibold">Resources</div>
-                {selected.resources?.length ? (
-                  <ul className="mt-3 space-y-2">
-                    {selected.resources.map((r) => {
-                      const locked = r.isMembersOnly && !isMember;
-                      return (
-                        <li key={r.id} className="flex items-center justify-between rounded-xl border p-3">
-                          <div>
-                            <div className="font-semibold">{r.title}</div>
-                            <div className="text-xs opacity-70">{r.kind.toUpperCase()}</div>
-                          </div>
-
-                          {locked ? (
-                            <span className="rounded-full bg-black/5 px-3 py-1 text-xs font-semibold">
-                              Members only
-                            </span>
-                          ) : (
-                            <button type="button" className="btn-outline">
-                              Open
-                            </button>
-                          )}
-                        </li>
-                      );
-                    })}
-                  </ul>
-                ) : (
-                  <div className="mt-2 text-sm opacity-70">No resources attached.</div>
-                )}
               </div>
 
               <div className="mt-6 flex flex-wrap gap-3">

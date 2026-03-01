@@ -1,6 +1,7 @@
 import "./globals.css";
 import Link from "next/link";
 import NavLink from "./components/NavLink";
+import { getCurrentUser } from "@/lib/session";
 
 
 export const metadata = {
@@ -8,7 +9,13 @@ export const metadata = {
   description: "Research. Education. Community",
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const user = await getCurrentUser();
+  const authHref = user ? "/members/logout" : "/members/login";
+  const authLabel = user ? "Logout" : "Member Login";
+  const membershipHref = user ? "/members" : "/membership";
+  const membershipLabel = user ? "My membership" : "Join";
+
   return (
     <html lang="en">
       <body>
@@ -23,16 +30,16 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
             <div className="flex items-center gap-3">
               <Link
-                href="/members/login"
+                href={authHref}
                 className="hover:underline text-white/90 hover:text-white"
               >
-                Member Login
+                {authLabel}
               </Link>
               <Link
-                href="/membership"
+                href={membershipHref}
                 className="font-semibold underline-offset-4 hover:underline"
               >
-                Join
+                {membershipLabel}
               </Link>
             </div>
           </div>
