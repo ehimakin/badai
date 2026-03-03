@@ -1,8 +1,10 @@
 import { cookies } from "next/headers";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { sha256 } from "@/lib/auth";
 
 export const SESSION_COOKIE_NAME = "session";
+export const TWO_FA_CHALLENGE_COOKIE_NAME = "two_fa_challenge";
 
 export async function getCurrentUser() {
   const cookieStore = await cookies();
@@ -11,17 +13,40 @@ export async function getCurrentUser() {
 
   const tokenHash = sha256(raw);
 
-  const session = await prisma.session.findUnique({
-    where: { tokenHash },
-    include: { user: true },
-  });
+  try {
+    const session = await prisma.session.findUnique({
+      where: { tokenHash },
+      include: { user: true },
+    });
 
-  if (!session) return null;
+    if (!session) return null;
 
-  // Expired session → treat as logged out
-  if (session.expiresAt <= new Date()) return null;
+    // Expired session → treat as logged out
+    if (session.expiresAt <= new Date()) return null;
 
-  return session.user;
+    return session.user;
+  } catch (error) {
+    if (isPrismaConnectionIssue(error)) {
+      console.error(
+        "Session lookup skipped because database connectivity is unavailable.",
+        error
+      );
+      return null;
+    }
+    throw error;
+  }
+}
+
+function isPrismaConnectionIssue(error: unknown) {
+  if (error instanceof Prisma.PrismaClientInitializationError) return true;
+  if (error instanceof Prisma.PrismaClientRustPanicError) return true;
+  if (
+    error instanceof Prisma.PrismaClientKnownRequestError &&
+    error.code === "P2024"
+  ) {
+    return true;
+  }
+  return false;
 }
 
 type RoleUser = {

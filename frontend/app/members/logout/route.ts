@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { sha256 } from "@/lib/auth";
-import { SESSION_COOKIE_NAME } from "@/lib/session";
+import { SESSION_COOKIE_NAME, TWO_FA_CHALLENGE_COOKIE_NAME } from "@/lib/session";
 
 async function clearSessionAndCookie(req: Request) {
   const cookieStore = await cookies();
@@ -19,6 +19,7 @@ async function clearSessionAndCookie(req: Request) {
 
   const res = NextResponse.redirect(new URL("/members/login", req.url));
   res.cookies.set(SESSION_COOKIE_NAME, "", { path: "/", expires: new Date(0) });
+  res.cookies.set(TWO_FA_CHALLENGE_COOKIE_NAME, "", { path: "/", expires: new Date(0) });
   return res;
 }
 

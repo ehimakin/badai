@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/session";
-import { headers } from "next/headers";
+import MembersDashboardClient from "./MembersDashboardClient";
 
 
 export default async function MembersHome() {
@@ -10,38 +10,21 @@ export default async function MembersHome() {
   return (
     <main className="mx-auto max-w-6xl px-4 py-16">
       <h1 className="text-3xl font-extrabold">Members Area</h1>
-      <p className="mt-3 opacity-80">Welcome, {user.fullName}.</p>
+      <p className="mt-3 opacity-80">Welcome, {user.displayName || user.fullName}.</p>
 
-      <div className="mt-8 rounded-2xl border p-6">
-        <div className="font-semibold">Member dashboard (demo)</div>
-        <div className="mt-2 text-sm opacity-80">
-          This page is protected by a session cookie + DB session record.
-        </div>
-
-        <form
-          action={async () => {
-            "use server";
-
-            const h = await headers();
-            const host = h.get("host");
-
-            // Fallback: if host missing, just redirect
-            if (!host) {
-              redirect("/members/login");
-            }
-
-            const proto = host.includes("localhost") ? "http" : "https";
-            await fetch(`${proto}://${host}/api/auth/logout`, { method: "POST" });
-
-            redirect("/members/login");
-          }}
-          className="mt-6"
-        >
-          <button className="btn-outline">Log out</button>
-        </form>
-
-      </div>
+      <MembersDashboardClient
+        initialProfile={{
+          fullName: user.fullName,
+          displayName: user.displayName,
+          memberTag: user.memberTag,
+          forename: user.forename,
+          surname: user.surname,
+          email: user.email,
+          mobile: user.mobile,
+          avatarUrl: user.avatarUrl,
+          twoFAEnabled: user.twoFAEnabled,
+        }}
+      />
     </main>
   );
 }
-

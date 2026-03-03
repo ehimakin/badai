@@ -8,6 +8,7 @@ export const metadata = {
   title: "British Dental AI Association",
   description: "Research. Education. Community",
 };
+export const dynamic = "force-dynamic";
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const user = await getCurrentUser();
@@ -29,12 +30,21 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             </div>
 
             <div className="flex items-center gap-3">
-              <Link
-                href={authHref}
-                className="hover:underline text-white/90 hover:text-white"
-              >
-                {authLabel}
-              </Link>
+              {user ? (
+                <a
+                  href="/members/logout"
+                  className="hover:underline text-white/90 hover:text-white"
+                >
+                  Logout
+                </a>
+              ) : (
+                <Link
+                  href={authHref}
+                  className="hover:underline text-white/90 hover:text-white"
+                >
+                  {authLabel}
+                </Link>
+              )}
               <Link
                 href={membershipHref}
                 className="font-semibold underline-offset-4 hover:underline"
