@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 type Props = {
   initialUsername: string;
+  initialTwoFAEnabled: boolean;
 };
 
 type ApiResponse = {
@@ -12,6 +13,12 @@ type ApiResponse = {
   message?: string;
   memberTag?: string | null;
   loggedOut?: boolean;
+  twoFAEnabled?: boolean;
+  secret?: string;
+  otpAuthUrl?: string;
+  expiresAt?: string;
+  recoveryCodes?: string[];
+  recoveryCodesRemaining?: number;
 };
 
 function toUsername(memberTag: string | null | undefined) {
@@ -19,9 +26,10 @@ function toUsername(memberTag: string | null | undefined) {
   return memberTag.replace(/^@/, "");
 }
 
-export default function AccountTab({ initialUsername }: Props) {
+export default function AccountTab({ initialUsername, initialTwoFAEnabled }: Props) {
   const [username, setUsername] = useState(initialUsername);
   const [usernamePassword, setUsernamePassword] = useState("");
+  const [usernameCode, setUsernameCode] = useState("");
   const [usernameBusy, setUsernameBusy] = useState(false);
   const [usernameMsg, setUsernameMsg] = useState<string | null>(null);
   const [usernameErr, setUsernameErr] = useState<string | null>(null);
@@ -29,21 +37,40 @@ export default function AccountTab({ initialUsername }: Props) {
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [passwordCode, setPasswordCode] = useState("");
   const [passwordBusy, setPasswordBusy] = useState(false);
   const [passwordMsg, setPasswordMsg] = useState<string | null>(null);
   const [passwordErr, setPasswordErr] = useState<string | null>(null);
 
   const [cancelPassword, setCancelPassword] = useState("");
   const [cancelConfirmation, setCancelConfirmation] = useState("");
+  const [cancelCode, setCancelCode] = useState("");
   const [cancelBusy, setCancelBusy] = useState(false);
   const [cancelErr, setCancelErr] = useState<string | null>(null);
 
   const [deletePassword, setDeletePassword] = useState("");
   const [deleteConfirmation, setDeleteConfirmation] = useState("");
+  const [deleteCode, setDeleteCode] = useState("");
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [deleteErr, setDeleteErr] = useState<string | null>(null);
 
-  async function submit(actionBody: Record<string, unknown>) {
+  const [twoFAEnabled, setTwoFAEnabled] = useState(initialTwoFAEnabled);
+  const [recoveryCodesRemaining, setRecoveryCodesRemaining] = useState<number | null>(null);
+  const [setupPassword, setSetupPassword] = useState("");
+  const [setupSecret, setSetupSecret] = useState<string | null>(null);
+  const [setupOtpAuthUrl, setSetupOtpAuthUrl] = useState<string | null>(null);
+  const [setupCode, setSetupCode] = useState("");
+  const [disablePassword, setDisablePassword] = useState("");
+  const [disableCode, setDisableCode] = useState("");
+  const [regenPassword, setRegenPassword] = useState("");
+  const [regenCode, setRegenCode] = useState("");
+  const [twoFABusy, setTwoFABusy] = useState(false);
+  const [twoFAErr, setTwoFAErr] = useState<string | null>(null);
+  const [newRecoveryCodes, setNewRecoveryCodes] = useState<string[]>([]);
+
+  const showTwoFAInput = useMemo(() => twoFAEnabled, [twoFAEnabled]);
+
+  async function submitAccountAction(actionBody: Record<string, unknown>) {
     const res = await fetch("/api/members/account", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -57,19 +84,44 @@ export default function AccountTab({ initialUsername }: Props) {
     return data ?? {};
   }
 
+  async function submitTwoFA(actionBody: Record<string, unknown>) {
+    const res = await fetch("/api/members/2fa", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(actionBody),
+    });
+    const data = (await res.json().catch(() => null)) as ApiResponse | null;
+    if (!res.ok) throw new Error(data?.error || "Unable to manage 2FA");
+    return data ?? {};
+  }
+
+  async function refreshTwoFAStatus() {
+    const res = await fetch("/api/members/2fa", { cache: "no-store" });
+    const data = (await res.json().catch(() => null)) as ApiResponse | null;
+    if (!res.ok) return;
+    setTwoFAEnabled(Boolean(data?.twoFAEnabled));
+    setRecoveryCodesRemaining(typeof data?.recoveryCodesRemaining === "number" ? data.recoveryCodesRemaining : null);
+  }
+
+  useEffect(() => {
+    void refreshTwoFAStatus();
+  }, []);
+
   async function onUsernameSubmit(e: React.FormEvent) {
     e.preventDefault();
     setUsernameBusy(true);
     setUsernameErr(null);
     setUsernameMsg(null);
     try {
-      const data = await submit({
+      const data = await submitAccountAction({
         action: "update_username",
         username,
         currentPassword: usernamePassword,
+        twoFactorCode: usernameCode || undefined,
       });
       setUsername(toUsername(data.memberTag));
       setUsernamePassword("");
+      setUsernameCode("");
       setUsernameMsg("Username updated.");
     } catch (err) {
       setUsernameErr(err instanceof Error ? err.message : "Unable to update username");
@@ -84,11 +136,12 @@ export default function AccountTab({ initialUsername }: Props) {
     setPasswordErr(null);
     setPasswordMsg(null);
     try {
-      const data = await submit({
+      const data = await submitAccountAction({
         action: "update_password",
         currentPassword,
         newPassword,
         confirmPassword,
+        twoFactorCode: passwordCode || undefined,
       });
       setPasswordMsg(data.message ?? "Password changed.");
       window.location.href = "/members/login";
@@ -103,10 +156,11 @@ export default function AccountTab({ initialUsername }: Props) {
     setCancelBusy(true);
     setCancelErr(null);
     try {
-      await submit({
+      await submitAccountAction({
         action: "cancel_membership",
         currentPassword: cancelPassword,
         confirmation: cancelConfirmation,
+        twoFactorCode: cancelCode || undefined,
       });
       window.location.href = "/members/login";
     } catch (err) {
@@ -120,16 +174,98 @@ export default function AccountTab({ initialUsername }: Props) {
     setDeleteBusy(true);
     setDeleteErr(null);
     try {
-      await submit({
+      await submitAccountAction({
         action: "delete_account",
         currentPassword: deletePassword,
         confirmation: deleteConfirmation,
+        twoFactorCode: deleteCode || undefined,
       });
       window.location.href = "/members/login";
     } catch (err) {
       setDeleteErr(err instanceof Error ? err.message : "Unable to delete account");
     } finally {
       setDeleteBusy(false);
+    }
+  }
+
+  async function onBeginTwoFASetup() {
+    setTwoFABusy(true);
+    setTwoFAErr(null);
+    setNewRecoveryCodes([]);
+    try {
+      const data = await submitTwoFA({
+        action: "begin_setup",
+        currentPassword: setupPassword,
+      });
+      setSetupSecret(data.secret ?? null);
+      setSetupOtpAuthUrl(data.otpAuthUrl ?? null);
+      setSetupPassword("");
+    } catch (err) {
+      setTwoFAErr(err instanceof Error ? err.message : "Unable to start 2FA setup");
+    } finally {
+      setTwoFABusy(false);
+    }
+  }
+
+  async function onConfirmTwoFASetup() {
+    setTwoFABusy(true);
+    setTwoFAErr(null);
+    try {
+      const data = await submitTwoFA({
+        action: "confirm_setup",
+        code: setupCode,
+      });
+      setTwoFAEnabled(Boolean(data.twoFAEnabled));
+      setSetupSecret(null);
+      setSetupOtpAuthUrl(null);
+      setSetupCode("");
+      setNewRecoveryCodes(data.recoveryCodes ?? []);
+      await refreshTwoFAStatus();
+    } catch (err) {
+      setTwoFAErr(err instanceof Error ? err.message : "Unable to confirm 2FA setup");
+    } finally {
+      setTwoFABusy(false);
+    }
+  }
+
+  async function onDisableTwoFA() {
+    setTwoFABusy(true);
+    setTwoFAErr(null);
+    setNewRecoveryCodes([]);
+    try {
+      await submitTwoFA({
+        action: "disable",
+        currentPassword: disablePassword,
+        code: disableCode,
+      });
+      setTwoFAEnabled(false);
+      setDisablePassword("");
+      setDisableCode("");
+      await refreshTwoFAStatus();
+    } catch (err) {
+      setTwoFAErr(err instanceof Error ? err.message : "Unable to disable 2FA");
+    } finally {
+      setTwoFABusy(false);
+    }
+  }
+
+  async function onRegenerateRecoveryCodes() {
+    setTwoFABusy(true);
+    setTwoFAErr(null);
+    try {
+      const data = await submitTwoFA({
+        action: "regenerate_recovery_codes",
+        currentPassword: regenPassword,
+        code: regenCode,
+      });
+      setNewRecoveryCodes(data.recoveryCodes ?? []);
+      setRegenPassword("");
+      setRegenCode("");
+      await refreshTwoFAStatus();
+    } catch (err) {
+      setTwoFAErr(err instanceof Error ? err.message : "Unable to regenerate recovery codes");
+    } finally {
+      setTwoFABusy(false);
     }
   }
 
@@ -175,6 +311,18 @@ export default function AccountTab({ initialUsername }: Props) {
             />
           </label>
 
+          {showTwoFAInput ? (
+            <label className="text-sm sm:col-span-2">
+              <span className="mb-1 block font-semibold">2FA code</span>
+              <input
+                className="w-full rounded-md border border-[#d1d5db] px-3 py-2"
+                value={usernameCode}
+                onChange={(e) => setUsernameCode(e.target.value)}
+                placeholder="6-digit authenticator code"
+              />
+            </label>
+          ) : null}
+
           <div className="sm:col-span-2 flex items-center gap-3">
             <button type="submit" className="btn-primary" disabled={usernameBusy}>
               {usernameBusy ? "Saving..." : "Save username"}
@@ -183,6 +331,128 @@ export default function AccountTab({ initialUsername }: Props) {
             {usernameErr ? <span className="text-sm text-red-600">{usernameErr}</span> : null}
           </div>
         </form>
+      </section>
+
+      <section className="rounded-xl border p-4">
+        <h3 className="text-lg font-bold">Two-factor authentication</h3>
+        <p className="mt-1 text-sm opacity-80">
+          Status: {twoFAEnabled ? "Enabled" : "Disabled"}
+          {typeof recoveryCodesRemaining === "number" ? ` • Recovery codes left: ${recoveryCodesRemaining}` : ""}
+        </p>
+
+        {!twoFAEnabled ? (
+          <div className="mt-4 space-y-3">
+            <label className="text-sm block">
+              <span className="mb-1 block font-semibold">Current password</span>
+              <input
+                type="password"
+                className="w-full rounded-md border border-[#d1d5db] px-3 py-2"
+                value={setupPassword}
+                onChange={(e) => setSetupPassword(e.target.value)}
+                placeholder="Current password"
+              />
+            </label>
+            <button type="button" className="btn-primary" disabled={twoFABusy || !setupPassword} onClick={onBeginTwoFASetup}>
+              {twoFABusy ? "Starting..." : "Start 2FA setup"}
+            </button>
+
+            {setupSecret ? (
+              <div className="rounded-lg bg-black/5 p-3 text-sm">
+                <div className="font-semibold">Step 1: Add this key in your authenticator app</div>
+                <div className="mt-1 break-all font-mono">{setupSecret}</div>
+                {setupOtpAuthUrl ? (
+                  <a href={setupOtpAuthUrl} className="mt-2 inline-block text-sm underline">
+                    Open setup link
+                  </a>
+                ) : null}
+                <div className="mt-3 font-semibold">Step 2: Enter the 6-digit code</div>
+                <input
+                  className="mt-1 w-full rounded-md border border-[#d1d5db] px-3 py-2"
+                  value={setupCode}
+                  onChange={(e) => setSetupCode(e.target.value)}
+                  placeholder="123456"
+                />
+                <button
+                  type="button"
+                  className="btn-primary mt-2"
+                  disabled={twoFABusy || setupCode.length < 6}
+                  onClick={onConfirmTwoFASetup}
+                >
+                  {twoFABusy ? "Confirming..." : "Enable 2FA"}
+                </button>
+              </div>
+            ) : null}
+          </div>
+        ) : (
+          <div className="mt-4 grid gap-4 lg:grid-cols-2">
+            <div className="rounded-lg border p-3">
+              <div className="font-semibold">Disable 2FA</div>
+              <div className="mt-2 space-y-2">
+                <input
+                  type="password"
+                  className="w-full rounded-md border border-[#d1d5db] px-3 py-2 text-sm"
+                  value={disablePassword}
+                  onChange={(e) => setDisablePassword(e.target.value)}
+                  placeholder="Current password"
+                />
+                <input
+                  className="w-full rounded-md border border-[#d1d5db] px-3 py-2 text-sm"
+                  value={disableCode}
+                  onChange={(e) => setDisableCode(e.target.value)}
+                  placeholder="Authenticator or recovery code"
+                />
+                <button
+                  type="button"
+                  className="btn-outline"
+                  disabled={twoFABusy || !disablePassword || !disableCode}
+                  onClick={onDisableTwoFA}
+                >
+                  {twoFABusy ? "Disabling..." : "Disable 2FA"}
+                </button>
+              </div>
+            </div>
+
+            <div className="rounded-lg border p-3">
+              <div className="font-semibold">Regenerate recovery codes</div>
+              <div className="mt-2 space-y-2">
+                <input
+                  type="password"
+                  className="w-full rounded-md border border-[#d1d5db] px-3 py-2 text-sm"
+                  value={regenPassword}
+                  onChange={(e) => setRegenPassword(e.target.value)}
+                  placeholder="Current password"
+                />
+                <input
+                  className="w-full rounded-md border border-[#d1d5db] px-3 py-2 text-sm"
+                  value={regenCode}
+                  onChange={(e) => setRegenCode(e.target.value)}
+                  placeholder="Authenticator or recovery code"
+                />
+                <button
+                  type="button"
+                  className="btn-outline"
+                  disabled={twoFABusy || !regenPassword || !regenCode}
+                  onClick={onRegenerateRecoveryCodes}
+                >
+                  {twoFABusy ? "Generating..." : "Generate new recovery codes"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {newRecoveryCodes.length > 0 ? (
+          <div className="mt-4 rounded-lg bg-amber-50 p-3 text-sm">
+            <div className="font-semibold">Save these recovery codes now.</div>
+            <ul className="mt-2 grid grid-cols-2 gap-2 font-mono">
+              {newRecoveryCodes.map((code) => (
+                <li key={code}>{code}</li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+
+        {twoFAErr ? <div className="mt-3 text-sm text-red-600">{twoFAErr}</div> : null}
       </section>
 
       <section className="rounded-xl border p-4">
@@ -226,6 +496,18 @@ export default function AccountTab({ initialUsername }: Props) {
             />
           </label>
 
+          {showTwoFAInput ? (
+            <label className="text-sm sm:col-span-3">
+              <span className="mb-1 block font-semibold">2FA code</span>
+              <input
+                className="w-full rounded-md border border-[#d1d5db] px-3 py-2"
+                value={passwordCode}
+                onChange={(e) => setPasswordCode(e.target.value)}
+                placeholder="6-digit authenticator code"
+              />
+            </label>
+          ) : null}
+
           <div className="sm:col-span-3 flex items-center gap-3">
             <button type="submit" className="btn-primary" disabled={passwordBusy}>
               {passwordBusy ? "Updating..." : "Change password"}
@@ -259,10 +541,18 @@ export default function AccountTab({ initialUsername }: Props) {
                 onChange={(e) => setCancelConfirmation(e.target.value)}
                 placeholder='Type "CANCEL"'
               />
+              {showTwoFAInput ? (
+                <input
+                  className="w-full rounded-md border border-[#d1d5db] px-3 py-2 text-sm"
+                  value={cancelCode}
+                  onChange={(e) => setCancelCode(e.target.value)}
+                  placeholder="2FA code"
+                />
+              ) : null}
               <button
                 type="button"
                 className="btn-outline"
-                disabled={cancelBusy || cancelConfirmation !== "CANCEL" || !cancelPassword}
+                disabled={cancelBusy || cancelConfirmation !== "CANCEL" || !cancelPassword || (showTwoFAInput && !cancelCode)}
                 onClick={onCancelMembership}
               >
                 {cancelBusy ? "Cancelling..." : "Cancel membership"}
@@ -289,10 +579,18 @@ export default function AccountTab({ initialUsername }: Props) {
                 onChange={(e) => setDeleteConfirmation(e.target.value)}
                 placeholder='Type "DELETE"'
               />
+              {showTwoFAInput ? (
+                <input
+                  className="w-full rounded-md border border-[#d1d5db] px-3 py-2 text-sm"
+                  value={deleteCode}
+                  onChange={(e) => setDeleteCode(e.target.value)}
+                  placeholder="2FA code"
+                />
+              ) : null}
               <button
                 type="button"
                 className="btn-primary bg-red-700 hover:bg-red-800"
-                disabled={deleteBusy || deleteConfirmation !== "DELETE" || !deletePassword}
+                disabled={deleteBusy || deleteConfirmation !== "DELETE" || !deletePassword || (showTwoFAInput && !deleteCode)}
                 onClick={onDeleteAccount}
               >
                 {deleteBusy ? "Deleting..." : "Delete account"}

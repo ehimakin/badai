@@ -23,6 +23,7 @@ type MemberProfile = {
   email: string;
   mobile: string | null;
   avatarUrl: string | null;
+  twoFAEnabled: boolean;
 };
 
 type Props = {
@@ -377,7 +378,10 @@ export default function MembersDashboardClient({ initialProfile }: Props) {
         ) : active === "diary" ? (
           <DiaryTab />
         ) : active === "account" ? (
-          <AccountTab initialUsername={asText(profile.memberTag).replace(/^@/, "")} />
+          <AccountTab
+            initialUsername={asText(profile.memberTag).replace(/^@/, "")}
+            initialTwoFAEnabled={profile.twoFAEnabled}
+          />
         ) : (
           <div className="mt-6 rounded-xl bg-black/5 p-4 text-sm opacity-80">
             Dummy panel content for the <span className="font-semibold">{current.label}</span> section.

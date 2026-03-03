@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { sha256 } from "@/lib/auth";
 
 export const SESSION_COOKIE_NAME = "session";
+export const TWO_FA_CHALLENGE_COOKIE_NAME = "two_fa_challenge";
 
 export async function getCurrentUser() {
   const cookieStore = await cookies();

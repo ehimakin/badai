@@ -22,6 +22,7 @@ export default async function MembersHome() {
           email: user.email,
           mobile: user.mobile,
           avatarUrl: user.avatarUrl,
+          twoFAEnabled: user.twoFAEnabled,
         }}
       />
     </main>

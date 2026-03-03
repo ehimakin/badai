@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { newToken, sha256, verifyPassword } from "@/lib/auth";
-import { SESSION_COOKIE_NAME } from "@/lib/session";
+import { createAuthenticatedResponse } from "@/lib/auth-session";
+import { TWO_FA_CHALLENGE_COOKIE_NAME } from "@/lib/session";
 
 const schema = z.object({
   email: z.string().trim().optional(),
@@ -43,20 +44,34 @@ export async function POST(req: Request) {
   const ok = await verifyPassword(password, user.passwordHash);
   if (!ok) return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
 
-  const rawSessionToken = newToken();
-  const tokenHash = sha256(rawSessionToken);
-  const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 7);
+  if (user.twoFAEnabled) {
+    const rawChallengeToken = newToken();
+    const tokenHash = sha256(rawChallengeToken);
+    const expiresAt = new Date(Date.now() + 1000 * 60 * 10);
 
-  await prisma.session.create({ data: { userId: user.id, tokenHash, expiresAt } });
+    await prisma.$transaction([
+      prisma.twoFAChallenge.deleteMany({ where: { userId: user.id } }),
+      prisma.twoFAChallenge.create({
+        data: {
+          userId: user.id,
+          tokenHash,
+          expiresAt,
+        },
+      }),
+    ]);
 
-  const res = NextResponse.json({ ok: true });
-  res.cookies.set(SESSION_COOKIE_NAME, rawSessionToken, {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-    path: "/",
-    expires: expiresAt,
-  });
+    const res = NextResponse.json({ ok: true, requiresTwoFactor: true });
+    res.cookies.set(TWO_FA_CHALLENGE_COOKIE_NAME, rawChallengeToken, {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+      path: "/",
+      expires: expiresAt,
+    });
+    return res;
+  }
 
+  const res = await createAuthenticatedResponse(user.id, { ok: true });
+  res.cookies.set(TWO_FA_CHALLENGE_COOKIE_NAME, "", { path: "/", expires: new Date(0) });
   return res;
 }

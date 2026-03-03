@@ -8,6 +8,9 @@ export default function MembersLoginPage() {
   const router = useRouter();
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
+  const [twoFactorCode, setTwoFactorCode] = useState("");
+  const [recoveryCode, setRecoveryCode] = useState("");
+  const [requiresTwoFactor, setRequiresTwoFactor] = useState(false);
   const [msg, setMsg] = useState<string>("");
   const [loading, setLoading] = useState(false);
 
@@ -31,6 +34,37 @@ export default function MembersLoginPage() {
       return;
     }
 
+    if (data?.requiresTwoFactor) {
+      setRequiresTwoFactor(true);
+      setMsg("Enter your authenticator code (or recovery code).");
+      return;
+    }
+
+    router.push("/members");
+  }
+
+  async function onVerifyTwoFactor(e: React.FormEvent) {
+    e.preventDefault();
+    setLoading(true);
+    setMsg("");
+
+    const res = await fetch("/api/auth/2fa/verify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        code: twoFactorCode || undefined,
+        recoveryCode: recoveryCode || undefined,
+      }),
+    });
+
+    const data = await res.json().catch(() => ({}));
+    setLoading(false);
+
+    if (!res.ok) {
+      setMsg(data?.error ?? "2FA verification failed");
+      return;
+    }
+
     router.push("/members");
   }
 
@@ -39,39 +73,84 @@ export default function MembersLoginPage() {
       <h1 className="text-3xl font-extrabold">Member Login</h1>
       <p className="mt-3 opacity-80">Sign in to access member resources.</p>
 
-      <form onSubmit={onSubmit} className="mt-8 space-y-4">
-        <div>
-          <label className="text-sm font-semibold">Email or username</label>
-          <input
-            className="mt-1 w-full rounded-md border px-3 py-2"
-            value={identifier}
-            onChange={(e) => setIdentifier(e.target.value)}
-            autoComplete="username"
-            placeholder="you@example.com or @username"
-          />
-        </div>
+      {!requiresTwoFactor ? (
+        <form onSubmit={onSubmit} className="mt-8 space-y-4">
+          <div>
+            <label className="text-sm font-semibold">Email or username</label>
+            <input
+              className="mt-1 w-full rounded-md border px-3 py-2"
+              value={identifier}
+              onChange={(e) => setIdentifier(e.target.value)}
+              autoComplete="username"
+              placeholder="you@example.com or @username"
+            />
+          </div>
 
-        <div>
-          <label className="text-sm font-semibold">Password</label>
-          <input
-            type="password"
-            className="mt-1 w-full rounded-md border px-3 py-2"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            autoComplete="current-password"
-          />
-        </div>
+          <div>
+            <label className="text-sm font-semibold">Password</label>
+            <input
+              type="password"
+              className="mt-1 w-full rounded-md border px-3 py-2"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              autoComplete="current-password"
+            />
+          </div>
 
-        <button className="btn-primary w-full" disabled={loading}>
-          {loading ? "Signing in…" : "Sign in"}
-        </button>
+          <button className="btn-primary w-full" disabled={loading}>
+            {loading ? "Signing in…" : "Sign in"}
+          </button>
 
-        {msg && <div className="text-sm text-red-600">{msg}</div>}
+          {msg && <div className="text-sm text-red-600">{msg}</div>}
 
-        <div className="text-sm opacity-80">
-          No account? <Link className="hover:underline" href="/membership">Register</Link>
-        </div>
-      </form>
+          <div className="text-sm opacity-80">
+            No account? <Link className="hover:underline" href="/membership">Register</Link>
+          </div>
+        </form>
+      ) : (
+        <form onSubmit={onVerifyTwoFactor} className="mt-8 space-y-4">
+          <div>
+            <label className="text-sm font-semibold">Authenticator code</label>
+            <input
+              className="mt-1 w-full rounded-md border px-3 py-2"
+              value={twoFactorCode}
+              onChange={(e) => setTwoFactorCode(e.target.value)}
+              placeholder="6-digit code"
+              autoComplete="one-time-code"
+            />
+          </div>
+
+          <div>
+            <label className="text-sm font-semibold">Or recovery code</label>
+            <input
+              className="mt-1 w-full rounded-md border px-3 py-2"
+              value={recoveryCode}
+              onChange={(e) => setRecoveryCode(e.target.value)}
+              placeholder="XXXX-XXXX"
+            />
+          </div>
+
+          <button className="btn-primary w-full" disabled={loading}>
+            {loading ? "Verifying…" : "Verify and sign in"}
+          </button>
+
+          <button
+            type="button"
+            className="btn-outline w-full"
+            onClick={() => {
+              setRequiresTwoFactor(false);
+              setTwoFactorCode("");
+              setRecoveryCode("");
+              setMsg("");
+            }}
+            disabled={loading}
+          >
+            Back
+          </button>
+
+          {msg && <div className="text-sm text-red-600">{msg}</div>}
+        </form>
+      )}
     </main>
   );
 }

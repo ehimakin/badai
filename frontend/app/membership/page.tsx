@@ -6,6 +6,8 @@ import Image from "next/image";
 
 export default function MembershipPage() {
   const [fullName, setFullName] = useState("");
+  const [username, setUsername] = useState("");
+  const [mobile, setMobile] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
@@ -22,7 +24,13 @@ export default function MembershipPage() {
       const res = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ fullName, email, password }),
+        body: JSON.stringify({
+          fullName,
+          username,
+          mobile: mobile.trim() || null,
+          email,
+          password,
+        }),
       });
 
       const raw = await res.text(); // read once
@@ -57,13 +65,12 @@ export default function MembershipPage() {
   return (
     <main className="mx-auto max-w-5xl px-4 py-16">
       <h1 className="text-3xl font-extrabold">Membership</h1>
-      <h2 className="mt-3 text-xl font-semibold">What becoming a member means...</h2>
       <p className="mt-4 max-w-3xl opacity-80">
         Membership connects you to practical education, peer discussion, and a shared standard for
         safe, evidence-based use of AI in dentistry.
       </p>
 
-      <div className="mt-14 grid gap-4 sm:grid-cols-3">
+      <div className="mt-12 grid gap-4 sm:grid-cols-3">
         <Image
           src="/slideshow/001.jpg"
           alt="Dental team in discussion"
@@ -87,10 +94,8 @@ export default function MembershipPage() {
         />
       </div>
 
-      <p className="mt-14 max-w-4xl opacity-80">
-        As a member, you gain access to curated learning, event participation, and resources designed
-        for clinical reality, not just theory. Our aim is to help you build confidence with clear,
-        applicable guidance.
+      <p className="mt-12 max-w-4xl opacity-80">
+        As a member, build confidence in AI through curated learning and bespoke resources.
       </p>
       <p className="mt-3 max-w-4xl opacity-80">
         Register below to create your member account. Once active, you can access member-only areas,
@@ -110,7 +115,7 @@ export default function MembershipPage() {
           </div>
         </div>
       ) : (
-        <form onSubmit={onSubmit} className="mt-[100px] max-w-3xl space-y-4">
+        <form onSubmit={onSubmit} className="mt-10 max-w-3xl space-y-4">
           <div>
             <label className="text-sm font-semibold">Full name</label>
             <input
@@ -118,6 +123,40 @@ export default function MembershipPage() {
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
               required
+            />
+          </div>
+
+          <div>
+            <label className="text-sm font-semibold">Username</label>
+            <div className="relative mt-1">
+              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 opacity-70">@</span>
+              <input
+                className="w-full rounded-md border border-[#d1d5db] py-2 pl-7 pr-3 focus:border-[#b8bec7] focus:outline-none focus:ring-1 focus:ring-[#b8bec7]"
+                value={username}
+                onChange={(e) =>
+                  setUsername(
+                    e.target.value
+                      .replace(/@/g, "")
+                      .replace(/\s+/g, "")
+                      .replace(/[^a-zA-Z0-9_]/g, "")
+                  )
+                }
+                required
+                minLength={3}
+                maxLength={24}
+                autoComplete="username"
+                placeholder="e.g drjanedoe"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="text-sm font-semibold">Mobile number</label>
+            <input
+              className="mt-1 w-full rounded-md border border-[#d1d5db] px-3 py-2 focus:border-[#b8bec7] focus:outline-none focus:ring-1 focus:ring-[#b8bec7]"
+              value={mobile}
+              onChange={(e) => setMobile(e.target.value)}
+              autoComplete="tel"
             />
           </div>
 

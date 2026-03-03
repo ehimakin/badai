@@ -3,9 +3,18 @@ import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { hashPassword, verifyPassword } from "@/lib/auth";
-import { getCurrentUser, SESSION_COOKIE_NAME } from "@/lib/session";
+import {
+  getCurrentUser,
+  SESSION_COOKIE_NAME,
+  TWO_FA_CHALLENGE_COOKIE_NAME,
+} from "@/lib/session";
+import { decryptTwoFASecret, verifyTotpCode } from "@/lib/twofa";
 
-const updateUsernameSchema = z.object({
+const baseActionSchema = z.object({
+  twoFactorCode: z.string().trim().optional(),
+});
+
+const updateUsernameSchema = baseActionSchema.extend({
   action: z.literal("update_username"),
   username: z
     .string()
@@ -16,8 +25,8 @@ const updateUsernameSchema = z.object({
   currentPassword: z.string().min(1),
 });
 
-const updatePasswordSchema = z
-  .object({
+const updatePasswordSchema = baseActionSchema
+  .extend({
     action: z.literal("update_password"),
     currentPassword: z.string().min(1),
     newPassword: z.string().min(8),
@@ -32,13 +41,13 @@ const updatePasswordSchema = z
     message: "New password must be different",
   });
 
-const cancelMembershipSchema = z.object({
+const cancelMembershipSchema = baseActionSchema.extend({
   action: z.literal("cancel_membership"),
   currentPassword: z.string().min(1),
   confirmation: z.literal("CANCEL"),
 });
 
-const deleteAccountSchema = z.object({
+const deleteAccountSchema = baseActionSchema.extend({
   action: z.literal("delete_account"),
   currentPassword: z.string().min(1),
   confirmation: z.literal("DELETE"),
@@ -58,7 +67,15 @@ function normalizeMemberTag(username: string) {
 function withLogoutCookie(body: Record<string, unknown>, status = 200) {
   const res = NextResponse.json(body, { status });
   res.cookies.set(SESSION_COOKIE_NAME, "", { path: "/", expires: new Date(0) });
+  res.cookies.set(TWO_FA_CHALLENGE_COOKIE_NAME, "", { path: "/", expires: new Date(0) });
   return res;
+}
+
+async function verifySecondFactorIfRequired(user: { twoFAEnabled: boolean; twoFASecret: string | null }, code?: string) {
+  if (!user.twoFAEnabled) return true;
+  if (!user.twoFASecret || !code) return false;
+  const secret = decryptTwoFASecret(user.twoFASecret);
+  return verifyTotpCode(secret, code);
 }
 
 export async function PATCH(req: Request) {
@@ -76,6 +93,11 @@ export async function PATCH(req: Request) {
   const passwordOk = await verifyPassword(data.currentPassword, user.passwordHash);
   if (!passwordOk) {
     return NextResponse.json({ error: "Current password is incorrect" }, { status: 401 });
+  }
+
+  const secondFactorOk = await verifySecondFactorIfRequired(user, data.twoFactorCode);
+  if (!secondFactorOk) {
+    return NextResponse.json({ error: "Invalid two-factor code" }, { status: 401 });
   }
 
   if (data.action === "update_username") {
@@ -112,6 +134,7 @@ export async function PATCH(req: Request) {
         data: { passwordHash },
       }),
       prisma.session.deleteMany({ where: { userId: user.id } }),
+      prisma.twoFAChallenge.deleteMany({ where: { userId: user.id } }),
     ]);
 
     return withLogoutCookie({
@@ -128,6 +151,7 @@ export async function PATCH(req: Request) {
         data: { status: "CANCELLED" },
       }),
       prisma.session.deleteMany({ where: { userId: user.id } }),
+      prisma.twoFAChallenge.deleteMany({ where: { userId: user.id } }),
     ]);
 
     return withLogoutCookie({
