@@ -18,8 +18,14 @@ model User {
   email         String    @unique
   passwordHash  String
   fullName      String
+  displayName   String?
+  memberTag     String?   @unique
+  forename      String?
+  surname       String?
+  mobile        String?
+  avatarUrl     String?
   role          String    @default("MEMBER") // MEMBER | ADMIN
-  status        String    @default("PENDING") // PENDING | ACTIVE | REJECTED
+  status        String    @default("PENDING") // PENDING | ACTIVE | REJECTED | CANCELLED
   emailVerified DateTime?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
@@ -30,6 +36,7 @@ model User {
   sessions      Session[]
   tokens        VerificationToken[]
   eventsCreated Event[]
+  eventBookings EventBooking[]
 }
 
 model Session {
@@ -98,4 +105,18 @@ model Event {
   createdBy   User?    @relation(fields: [createdById], references: [id], onDelete: SetNull)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+  bookings    EventBooking[]
+}
+
+model EventBooking {
+  id        String   @id @default(cuid())
+  userId    String
+  eventId   String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, eventId])
+  @@index([userId])
+  @@index([eventId])
 }

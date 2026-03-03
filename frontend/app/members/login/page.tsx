@@ -6,7 +6,7 @@ import Link from "next/link";
 
 export default function MembersLoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState("");
+  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [msg, setMsg] = useState<string>("");
   const [loading, setLoading] = useState(false);
@@ -19,7 +19,7 @@ export default function MembersLoginPage() {
     const res = await fetch("/api/auth/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ identifier, password }),
     });
 
     const data = await res.json().catch(() => ({}));
@@ -41,12 +41,13 @@ export default function MembersLoginPage() {
 
       <form onSubmit={onSubmit} className="mt-8 space-y-4">
         <div>
-          <label className="text-sm font-semibold">Email</label>
+          <label className="text-sm font-semibold">Email or username</label>
           <input
             className="mt-1 w-full rounded-md border px-3 py-2"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            autoComplete="email"
+            value={identifier}
+            onChange={(e) => setIdentifier(e.target.value)}
+            autoComplete="username"
+            placeholder="you@example.com or @username"
           />
         </div>
 

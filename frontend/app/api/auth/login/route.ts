@@ -5,18 +5,34 @@ import { newToken, sha256, verifyPassword } from "@/lib/auth";
 import { SESSION_COOKIE_NAME } from "@/lib/session";
 
 const schema = z.object({
-  email: z.string().email(),
+  email: z.string().trim().optional(),
+  identifier: z.string().trim().optional(),
   password: z.string().min(1),
+}).refine((data) => Boolean(data.identifier || data.email), {
+  message: "Email or username is required",
+  path: ["identifier"],
 });
+
+function normalizeMemberTag(raw: string) {
+  const value = raw.startsWith("@") ? raw : `@${raw}`;
+  return value.toLowerCase();
+}
 
 export async function POST(req: Request) {
   const body = await req.json().catch(() => null);
   const parsed = schema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: "Invalid input" }, { status: 400 });
 
-  const { email, password } = parsed.data;
+  const identifier = (parsed.data.identifier ?? parsed.data.email ?? "").trim();
+  const password = parsed.data.password;
+  const byEmail = identifier.includes("@") && !identifier.startsWith("@");
+  const memberTag = byEmail ? null : normalizeMemberTag(identifier);
 
-  const user = await prisma.user.findUnique({ where: { email } });
+  const user = await prisma.user.findFirst({
+    where: byEmail
+      ? { email: identifier }
+      : { OR: [{ memberTag }, { displayName: identifier }] },
+  });
   if (!user) return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
 
   // For now: allow login if ACTIVE (skip email verify until you wire email)
